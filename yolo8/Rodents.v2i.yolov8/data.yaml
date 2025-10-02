@@ -1,0 +1,13 @@
+train: ../train/images
+val: ../valid/images
+test: ../test/images
+
+nc: 3
+names: ['Face', 'Genital', 'object']
+
+roboflow:
+  workspace: mousefacedetection
+  project: rodents-col7p
+  version: 2
+  license: CC BY 4.0
+  url: https://universe.roboflow.com/mousefacedetection/rodents-col7p/dataset/2
