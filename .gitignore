@@ -1,0 +1,16 @@
+# Dataset directories - DO NOT TRACK THESE
+combined_dataset/
+rebalanced_dataset/
+augmentation_dataset/
+
+# Dataset cache and temporary files
+*.cache
+*.tmp
+*.temp
+.cache/
+temp/
+tmp/
+
+# No need to .ipynb folders of not developed or later ideas
+develop_video.ipynb
+testing.ipynb
