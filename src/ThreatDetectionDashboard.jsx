@@ -25,26 +25,42 @@ export default function ThreatDetectionDashboard() {
   // }, []);
 
   useEffect(() => {
-    const evtSource = new EventSource(ALERTS_URL);
+    let evtSource;
+    let retryTimeout;
 
-    evtSource.onmessage = (event) => {
-      try {
-        const alert = JSON.parse(event.data);
-        setAlerts((prev) => [
-          { id: Date.now(), type: alert.type, time: alert.time || new Date().toLocaleTimeString() },
-          ...prev.slice(0, 4),
-        ]);
-      } catch (err) {
-        console.error("Failed to parse alert", err);
-      }
+    const connect = () => {
+      evtSource = new EventSource(ALERTS_URL);
+
+      evtSource.onopen = () => {
+        console.log("Connected to alert server ✅");
+      };
+
+      evtSource.onmessage = (event) => {
+        try {
+          const alert = JSON.parse(event.data);
+          setAlerts((prev) => [
+            { id: Date.now(), type: alert.type, time: alert.time || new Date().toLocaleTimeString() },
+            ...prev.slice(0, 4),
+          ]);
+        } catch (err) {
+          console.error("Failed to parse alert", err);
+        }
+      };
+
+      evtSource.onerror = (err) => {
+        console.error("SSE connection lost, retrying in 3s...", err);
+        evtSource.close();
+        retryTimeout = setTimeout(connect, 10000); // retry after 10 seconds
+      };
+
+    };
+
+    connect();
+
+  return () => {
+    if (evtSource) evtSource.close();
+    if (retryTimeout) clearTimeout(retryTimeout);
   };
-
-  evtSource.onerror = (err) => {
-    console.error("SSE error:", err);
-    evtSource.close();
-  };
-
-  return () => evtSource.close();
 }, []);
 
 
