@@ -4,22 +4,49 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { AlertCircle, Shield, Camera } from "lucide-react";
 
+const LIVE_FEED_URL = "http://10.0.0.113:8081/video_feed";
+const ALERTS_URL = "http://10.0.0.113:8081/alerts";
+
 export default function ThreatDetectionDashboard() {
   const [alerts, setAlerts] = useState([]);
-  const [liveFeedUrl, setLiveFeedUrl] = useState("http://<pi-ip>:5000/video_feed");
+  const [liveFeedUrl, setLiveFeedUrl] = useState(LIVE_FEED_URL);
 
-  // Mock alert system (replace with WebSocket/REST from Flask)
+  // // Mock alert system (replace with WebSocket/REST from Flask)
+  // useEffect(() => {
+  //   const interval = setInterval(() => {
+  //     const threats = ["Person", "Knife", "Unknown Object"];
+  //     const randomThreat = threats[Math.floor(Math.random() * threats.length)];
+  //     setAlerts((prev) => [
+  //       { id: Date.now(), type: randomThreat, time: new Date().toLocaleTimeString() },
+  //       ...prev.slice(0, 4),
+  //     ]);
+  //   }, 10000);
+  //   return () => clearInterval(interval);
+  // }, []);
+
   useEffect(() => {
-    const interval = setInterval(() => {
-      const threats = ["Person", "Knife", "Unknown Object"];
-      const randomThreat = threats[Math.floor(Math.random() * threats.length)];
-      setAlerts((prev) => [
-        { id: Date.now(), type: randomThreat, time: new Date().toLocaleTimeString() },
-        ...prev.slice(0, 4),
-      ]);
-    }, 10000);
-    return () => clearInterval(interval);
-  }, []);
+    const evtSource = new EventSource(ALERTS_URL);
+
+    evtSource.onmessage = (event) => {
+      try {
+        const alert = JSON.parse(event.data);
+        setAlerts((prev) => [
+          { id: Date.now(), type: alert.type, time: alert.time || new Date().toLocaleTimeString() },
+          ...prev.slice(0, 4),
+        ]);
+      } catch (err) {
+        console.error("Failed to parse alert", err);
+      }
+  };
+
+  evtSource.onerror = (err) => {
+    console.error("SSE error:", err);
+    evtSource.close();
+  };
+
+  return () => evtSource.close();
+}, []);
+
 
   return (
     <div className="min-h-screen bg-gray-950 text-white p-6">
