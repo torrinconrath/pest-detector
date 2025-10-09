@@ -1,5 +1,5 @@
 import React from "react";
-import ThreatDetectionDashboard from "./ThreatDetectionDashboard";
+import ThreatDetectionDashboard from "./PestDetectionDashboard";
 
 function App() {
   return <ThreatDetectionDashboard />;

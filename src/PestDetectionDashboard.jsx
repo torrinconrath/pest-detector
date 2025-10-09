@@ -7,7 +7,7 @@ import { AlertCircle, Shield, Camera } from "lucide-react";
 const LIVE_FEED_URL = "http://10.0.0.113:8081/video_feed";
 const ALERTS_URL = "http://10.0.0.113:8081/alerts";
 
-export default function ThreatDetectionDashboard() {
+export default function PestDetectionDashboard() {
   const [alerts, setAlerts] = useState([]);
   const [liveFeedUrl, setLiveFeedUrl] = useState(LIVE_FEED_URL);
 
