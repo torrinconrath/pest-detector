@@ -11,6 +11,8 @@ augmentation_dataset/
 .cache/
 temp/
 tmp/
+*.mp4
+synthetic_pest_feed_adaptive_v3.mp4
 
 # No need to .ipynb folders of not developed or later ideas
 develop_video.ipynb
