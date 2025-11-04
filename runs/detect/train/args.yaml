@@ -2,10 +2,10 @@ task: detect
 mode: train
 model: yolo11n.pt
 data: data.yaml
-epochs: 100
+epochs: 50
 time: null
-patience: 10
-batch: 16
+patience: 100
+batch: 32
 imgsz: 640
 save: true
 save_period: -1
@@ -18,7 +18,7 @@ exist_ok: false
 pretrained: true
 optimizer: auto
 verbose: true
-seed: 42
+seed: 0
 deterministic: true
 single_cls: true
 rect: false

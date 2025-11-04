@@ -1,5 +1,6 @@
 # Dataset directories - DO NOT TRACK THESE
 combined_dataset/
+combined_dataset_grayscale/
 rebalanced_dataset/
 augmentation_dataset/
 

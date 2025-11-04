@@ -2,6 +2,7 @@ path: c:\Users\plebj\Desktop\School\CS5814\augmentation_dataset
 train: train/images
 val: valid/images
 test: test/images
-nc: 1
+nc: 2
 names:
-  0: pest
+  0: raccoon
+  1: rodent

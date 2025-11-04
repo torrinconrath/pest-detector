@@ -14,11 +14,13 @@ from ultralytics import YOLO
 import glob
 
 # === CONFIG ===
-MODEL_PATH = "runs/detect/train4/weights/best.pt"
+MODEL_PATH = "runs/detect/train/weights/best.pt"
 TEST_IMAGES_DIR = "augmentation_dataset/test/images"
 
 # === CHOOSE ONE BACKGROUND SET (DAY OR NIGHT) ===
 mode = random.choice(["day", "night"])  # or manually set: mode = "day"
+mode = "night"
+
 if mode == "day":
     BACKGROUND_IMAGES = glob.glob("daycam_backgrounds/*.*")
 else:
@@ -29,11 +31,20 @@ if not BACKGROUND_IMAGES:
 
 print(f"Running adaptive feed in '{mode.upper()}' mode with {len(BACKGROUND_IMAGES)} backgrounds.")
 
+# === LOAD BACKGROUNDS AS GRAYSCALE (3-channel) ===
+backgrounds = []
+for bg_path in BACKGROUND_IMAGES:
+    img = cv2.imread(bg_path, cv2.IMREAD_GRAYSCALE)
+    if img is None:
+        continue
+    # Keep 3 channels for YOLO inference compatibility
+    img_gray_3ch = cv2.merge([img, img, img])
+    backgrounds.append(img_gray_3ch)
 
-if not BACKGROUND_IMAGES:
-    raise FileNotFoundError("No background images found in 'daycam_backgrounds/' or 'nightcam_backgrounds/'")
+if not backgrounds:
+    raise FileNotFoundError("No valid grayscale background images could be loaded!")
 
-print(f"Loaded {len(BACKGROUND_IMAGES)} background images.")
+print(f"✅ Loaded {len(backgrounds)} grayscale background images.")
 
 OUTPUT_VIDEO = "synthetic_pest_feed_adaptive_v3.mp4"
 
@@ -42,23 +53,19 @@ FRAME_SIZE = (640, 640)
 FPS = 10
 DURATION = 60
 PEST_PROB = 0.05
-CONF_THRESHOLD = 0.25
-AUGMENT_PROB = 0.4
+CONF_THRESHOLD = 0.5
+AUGMENT_PROB = 0
 BRIGHTEN_PEST = True
 
 # === LOAD MODEL ===
 model = YOLO(MODEL_PATH)
 
-# === LOAD IMAGES ===
+# === LOAD TEST PEST IMAGES ===
 pest_images = sorted([
     os.path.join(TEST_IMAGES_DIR, f)
     for f in os.listdir(TEST_IMAGES_DIR)
     if f.lower().endswith((".jpg", ".png", ".jpeg"))
 ])
-
-backgrounds = [cv2.imread(bg) for bg in BACKGROUND_IMAGES if os.path.exists(bg)]
-if not backgrounds:
-    raise FileNotFoundError("No valid background images found!")
 
 # === UTILS ===
 
@@ -93,7 +100,7 @@ def random_augment(img):
 
 def overlay_pest(background, pest_img):
     """Overlay pest onto the background at random location."""
-    pest_img = cv2.resize(pest_img, (random.randint(80, 200), random.randint(80, 200)))
+    pest_img = cv2.resize(pest_img, (random.randint(150, 400), random.randint(150, 400)))
     h, w, _ = pest_img.shape
     x, y = random.randint(0, FRAME_SIZE[0] - w), random.randint(0, FRAME_SIZE[1] - h)
 
@@ -113,6 +120,12 @@ def overlay_pest_with_brightness(background, pest_img):
     """Brighten pest before overlay for visibility in dark scenes."""
     pest_img = cv2.convertScaleAbs(pest_img, alpha=1.4, beta=10)
     return overlay_pest(background, pest_img)
+
+def normalize_lighting(frame):
+    gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+    clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
+    eq = clahe.apply(gray)
+    return cv2.merge([eq, eq, eq])
 
 # === VIDEO ===
 fourcc = cv2.VideoWriter_fourcc(*"mp4v")
@@ -151,6 +164,7 @@ for i in range(frame_count):
         bg = random_augment(bg)
 
     # === YOLO INFERENCE ===
+    bg = normalize_lighting(bg)
     results = model(bg, verbose=False)
     boxes = results[0].boxes
     detections = []
