@@ -2,7 +2,6 @@ path: c:\Users\plebj\Desktop\School\CS5814\rebalanced_dataset
 train: train/images
 val: valid/images
 test: test/images
-nc: 2
+nc: 1
 names:
   0: raccoon
-  1: rodent

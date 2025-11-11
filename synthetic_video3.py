@@ -15,7 +15,7 @@ import glob
 
 # === CONFIG ===
 MODEL_PATH = "runs/detect/train/weights/best.pt"
-TEST_IMAGES_DIR = "augmentation_dataset/test/images"
+TEST_IMAGES_DIR = "rebalanced_dataset/test/images"
 
 # === CHOOSE ONE BACKGROUND SET (DAY OR NIGHT) ===
 mode = random.choice(["day", "night"])  # or manually set: mode = "day"
@@ -53,7 +53,7 @@ FRAME_SIZE = (640, 640)
 FPS = 10
 DURATION = 60
 PEST_PROB = 0.05
-CONF_THRESHOLD = 0.6
+CONF_THRESHOLD = 0.5
 AUGMENT_PROB = 0.25
 BRIGHTEN_PEST = True
 

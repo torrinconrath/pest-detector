@@ -1,0 +1,484 @@
+def train_model_real_world(yaml_path="data.yaml"):
+    """Training optimized for real-world nocturnal raccoon detection"""
+    
+    print("🌙 Training for Real-World Nocturnal Raccoon Detection...")
+    model = YOLO("yolo11n.pt")
+    
+    results = model.train(
+        data=yaml_path,
+        epochs=200,  # More epochs for better feature learning
+        imgsz=640,
+        batch=16,
+        device=0,
+        single_cls=True,
+
+        # === REAL-WORLD NIGHTTIME AUGMENTATION ===
+        hsv_h=0.1, hsv_s=0.9, hsv_v=0.8,  # Much broader color variation
+        degrees=15.0, translate=0.3, scale=0.8,  # Extreme geometric variations
+        shear=0.3,  # More shear for unusual angles
+        perspective=0.001,
+        fliplr=0.5,
+        
+        # === NIGHT-SPECIFIC AUGMENTATIONS ===
+        mosaic=1.0,
+        mixup=0.3,      # Increased mixup for robustness
+        copy_paste=0.3, # Object copying for more examples
+        erasing=0.4,    # Random erasing for occlusion simulation
+
+        # === OPTIMIZATION FOR LOW-LIGHT DETECTION ===
+        lr0=0.01,
+        lrf=0.002,      # Lower final LR for stability
+        momentum=0.937,
+        weight_decay=0.0001,  # Lighter regularization
+        warmup_epochs=5.0,
+        
+        # === LOSS BALANCE FOR SENSITIVE DETECTION ===
+        box=12.0,       # Much higher box loss - focus on localization
+        cls=0.2,        # Lower classification focus
+        dfl=2.0,
+        
+        # === REGULARIZATION ===
+        label_smoothing=0.2,
+        dropout=0.2,
+        
+        # === TRAINING STRATEGY ===
+        patience=30,
+        save_period=10,
+        val=True,
+        amp=True,  # Mixed precision for stability
+        
+        verbose=True,
+    )
+    
+    return model, results
+
+
+
+    //// /////////////////////
+
+
+  """
+Test 5: REALISTIC Nocturnal Raccoon Detection Test
+Fixed version based on your poor recall results
+"""
+
+import os
+import cv2
+import glob
+import random
+import numpy as np
+from ultralytics import YOLO
+from pathlib import Path
+
+# === CONFIGURATION ===
+MODEL_PATH = "runs/detect/train/weights/best.pt"
+TEST_IMAGES_DIR = "rebalanced_dataset/test/images"
+FRAME_SIZE = (640, 640)
+FPS = 8
+DURATION = 60
+OUTPUT_VIDEO = "realistic_night_raccoon_test.mp4"
+
+# === REALISTIC ENVIRONMENT PROFILES ===
+class RealisticEnvironmentProfile:
+    # Higher probability of raccoons - more test cases
+    MODES = ["clear_night", "foggy_night", "rainy_night", "lens_glare", "overcast", "pitch_black"]
+    MODE_WEIGHTS = [0.25, 0.15, 0.15, 0.15, 0.15, 0.15]  # More variety
+
+    # LOWER confidence thresholds for better recall
+    CONFIDENCE_THRESHOLDS = {
+        "clear_night": 0.2,    # Much lower for recall
+        "foggy_night": 0.25,
+        "rainy_night": 0.3,
+        "lens_glare": 0.25,
+        "overcast": 0.2,
+        "pitch_black": 0.15    # Very low for dark conditions
+    }
+
+    # HIGHER pest probability - we need more test cases!
+    PEST_PROB = 0.25  # Increased from 0.07 to get more meaningful stats
+
+config = RealisticEnvironmentProfile()
+
+# === IMPROVED ENVIRONMENTAL SIMULATION ===
+class RealisticNightEnvironment:
+    def apply_effect(self, img, mode):
+        """Apply realistic nighttime effects"""
+        # Convert to float for processing
+        img = img.astype(np.float32)
+        
+        if mode == "clear_night":
+            # Moderate night conditions
+            img *= 0.4
+            img += np.random.normal(0, 8, img.shape)
+            
+        elif mode == "foggy_night":
+            # Heavy fog simulation
+            img *= 0.3
+            # Add fog overlay
+            fog = np.ones_like(img) * 40
+            alpha = random.uniform(0.3, 0.6)
+            img = cv2.addWeighted(img, 1-alpha, fog, alpha, 0)
+            img = cv2.GaussianBlur(img, (15, 15), 5)
+            
+        elif mode == "rainy_night":
+            # Rain effects
+            img *= 0.5
+            # Add rain streaks
+            for _ in range(50):
+                x = random.randint(0, img.shape[1] - 3)
+                length = random.randint(20, 60)
+                cv2.line(img, (x, 0), (x, length), (30, 30, 30), 2)
+            img = cv2.GaussianBlur(img, (7, 7), 2)
+            
+        elif mode == "lens_glare":
+            # Lens glare and reflections
+            img *= 0.6
+            overlay = np.zeros_like(img)
+            # Multiple glare sources
+            for _ in range(random.randint(3, 6)):
+                center = (random.randint(0, img.shape[1]), random.randint(0, img.shape[0]))
+                radius = random.randint(40, 120)
+                intensity = random.randint(100, 200)
+                cv2.circle(overlay, center, radius, (intensity, intensity, intensity), -1)
+                # Add bloom effect
+                cv2.GaussianBlur(overlay, (51, 51), 30, overlay)
+            img = cv2.addWeighted(img, 0.8, overlay, 0.4, 0)
+            
+        elif mode == "overcast":
+            # Cloudy night
+            img *= 0.7
+            img = cv2.equalizeHist(img.astype(np.uint8)).astype(np.float32)
+            
+        elif mode == "pitch_black":
+            # Very dark conditions
+            img *= 0.2
+            # Add some sensor noise
+            img += np.random.normal(0, 12, img.shape)
+            # Crush blacks
+            img = np.power(img/255.0, 1.5) * 255
+
+        # Always add some noise and clip
+        img += np.random.normal(0, 6, img.shape)
+        img = np.clip(img, 0, 255).astype(np.uint8)
+        return img
+
+# === IMPROVED RACCOON OVERLAY ===
+class RealisticRaccoonOverlay:
+    def __init__(self, frame_size):
+        self.frame_size = frame_size
+        self.images = self.load_and_augment_images()
+
+    def load_and_augment_images(self):
+        """Load raccoon images and apply realistic augmentations"""
+        imgs = []
+        for ext in ['*.jpg', '*.jpeg', '*.png']:
+            imgs.extend(glob.glob(os.path.join(TEST_IMAGES_DIR, ext)))
+        
+        raccoons = []
+        for img_path in imgs:
+            img = cv2.imread(img_path)
+            if img is not None:
+                # Resize to reasonable dimensions first
+                h, w = img.shape[:2]
+                max_dim = max(h, w)
+                if max_dim > 400:
+                    scale = 400 / max_dim
+                    img = cv2.resize(img, (int(w*scale), int(h*scale)))
+                
+                # Apply nighttime-like preprocessing
+                img = self.preprocess_for_night(img)
+                raccoons.append(img)
+        
+        print(f"✅ Loaded {len(raccoons)} raccoon images with night preprocessing.")
+        return raccoons
+
+    def preprocess_for_night(self, img):
+        """Preprocess images to look more like nighttime captures"""
+        # Reduce brightness and contrast
+        img = img.astype(np.float32)
+        img *= random.uniform(0.3, 0.7)  # Random brightness
+        img += random.uniform(-10, 10)   # Random offset
+        img = np.clip(img, 0, 255).astype(np.uint8)
+        
+        # Add slight blur to simulate night camera
+        if random.random() > 0.5:
+            img = cv2.GaussianBlur(img, (3, 3), 0.5)
+            
+        return img
+
+    def overlay_raccoon(self, bg, attempt=0):
+        """Realistic raccoon overlay with multiple attempts for good placement"""
+        if not self.images or attempt > 5:
+            return bg, None
+
+        pest = random.choice(self.images).copy()
+        h, w = pest.shape[:2]
+        
+        # More realistic size range for security cameras
+        scale = random.uniform(0.15, 0.35)  # Smaller minimum size
+        new_w, new_h = int(w * scale), int(h * scale)
+        
+        # Ensure minimum size
+        new_w = max(new_w, 30)
+        new_h = max(new_h, 30)
+        
+        pest_resized = cv2.resize(pest, (new_w, new_h))
+        
+        frame_h, frame_w = self.frame_size
+        
+        # Try to place in realistic locations (often lower part of frame)
+        if random.random() > 0.3:  # 70% chance for ground-level placement
+            y_min = int(frame_h * 0.6)  # Lower portion
+            y_max = frame_h - new_h - 5
+        else:
+            y_min = 0
+            y_max = frame_h - new_h - 5
+            
+        y_min = max(0, y_min)
+        y_max = max(y_min, y_max)
+        
+        if y_max <= y_min:
+            return self.overlay_raccoon(bg, attempt + 1)
+            
+        x = random.randint(10, max(11, frame_w - new_w - 10))
+        y = random.randint(y_min, y_max)
+        
+        # Simple alpha blending for realism
+        roi = bg[y:y+new_h, x:x+new_w]
+        if roi.shape == pest_resized.shape:
+            # Blend based on darkness (night-friendly)
+            alpha = random.uniform(0.7, 0.9)
+            blended = cv2.addWeighted(roi, 1-alpha, pest_resized, alpha, 0)
+            bg[y:y+new_h, x:x+new_w] = blended
+        
+        return bg, (x, y, x + new_w, y + new_h)
+
+# === IMPROVED METRICS & VISUALIZATION ===
+def calculate_iou(box1, box2):
+    """Calculate Intersection over Union"""
+    if box1 is None or box2 is None:
+        return 0.0
+        
+    x11, y11, x21, y21 = box1
+    x12, y12, x22, y22 = box2
+    
+    xi1 = max(x11, x12)
+    yi1 = max(y11, y12)
+    xi2 = min(x21, x22)
+    yi2 = min(y21, y22)
+    
+    inter_area = max(0, xi2 - xi1) * max(0, yi2 - yi1)
+    box1_area = (x21 - x11) * (y21 - y11)
+    box2_area = (x22 - x12) * (y22 - y12)
+    union_area = box1_area + box2_area - inter_area
+    
+    return inter_area / (union_area + 1e-9)
+
+def draw_detection_info(frame, detections, stats, frame_idx, mode, conf_thres, pest_bbox):
+    """Improved visualization"""
+    # Draw ground truth if exists
+    if pest_bbox:
+        x1, y1, x2, y2 = pest_bbox
+        cv2.rectangle(frame, (x1, y1), (x2, y2), (255, 255, 0), 2)  # Cyan for ground truth
+        cv2.putText(frame, "TRUTH", (x1, max(15, y1 - 6)),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 255, 0), 1)
+    
+    # Draw detections
+    for (x1, y1, x2, y2, conf) in detections:
+        color = (0, 255, 0)  # Green for correct detections
+        # Check if this detection matches ground truth
+        if pest_bbox:
+            iou_val = calculate_iou((x1, y1, x2, y2), pest_bbox)
+            if iou_val > 0.3:  # Good detection
+                color = (0, 255, 0)  # Green
+            else:  # False positive
+                color = (0, 0, 255)  # Red
+        
+        cv2.rectangle(frame, (x1, y1), (x2, y2), color, 2)
+        cv2.putText(frame, f"raccoon {conf:.2f}", (x1, max(15, y1 - 6)),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.4, color, 1)
+    
+    # Calculate current metrics
+    current_recall = stats["detected"] / max(1, stats["true"])
+    current_precision = stats["detected"] / max(1, stats["detected"] + stats["false_pos"])
+    
+    # Display info
+    lines = [
+        f"Frame: {frame_idx}/{stats['total']}",
+        f"Environment: {mode}",
+        f"Confidence: {conf_thres:.2f}",
+        f"True Raccoons: {stats['true']}",
+        f"Detected: {stats['detected']}",
+        f"False Positives: {stats['false_pos']}",
+        f"Current Recall: {current_recall:.3f}",
+        f"Current Precision: {current_precision:.3f}"
+    ]
+    
+    for i, text in enumerate(lines):
+        y_pos = 20 + i * 16
+        # Background for readability
+        cv2.rectangle(frame, (5, y_pos-12), (250, y_pos+4), (0, 0, 0), -1)
+        cv2.putText(frame, text, (10, y_pos),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 255, 255), 1)
+    
+    return frame
+
+# === MAIN TEST FUNCTION ===
+def run_realistic_test():
+    print("🌙 Running REALISTIC Nocturnal Raccoon Detection Test")
+    print("Target: Improve recall from 0.138 to >0.8")
+    
+    model = YOLO(MODEL_PATH)
+    env = RealisticNightEnvironment()
+    overlay = RealisticRaccoonOverlay(frame_size=FRAME_SIZE)
+
+    # Load or create realistic backgrounds
+    bg_images = []
+    # Try multiple background sources
+    background_sources = ["nightcam_backgrounds", "daycam_backgrounds", "synthetic_night"]
+    
+    for source in background_sources:
+        if os.path.exists(source):
+            for path in glob.glob(f"{source}/*.*"):
+                img = cv2.imread(path)
+                if img is not None:
+                    img = cv2.resize(img, FRAME_SIZE)
+                    # Convert to nighttime
+                    img = img.astype(np.float32) * 0.3 + np.random.normal(0, 5, img.shape)
+                    img = np.clip(img, 0, 255).astype(np.uint8)
+                    bg_images.append(img)
+    
+    # Create synthetic backgrounds if none found
+    if not bg_images:
+        print("🔄 Creating synthetic nighttime backgrounds...")
+        for _ in range(10):
+            # Create various nighttime backgrounds
+            base = np.random.randint(10, 60, (FRAME_SIZE[1], FRAME_SIZE[0], 3), dtype=np.uint8)
+            # Add some texture
+            noise = np.random.normal(0, 8, base.shape).astype(np.uint8)
+            bg = cv2.add(base, noise)
+            bg_images.append(bg)
+
+    print(f"✅ Using {len(bg_images)} background images")
+
+    # Initialize stats
+    stats = {
+        "true": 0, 
+        "detected": 0, 
+        "false_pos": 0, 
+        "total": int(DURATION * FPS),
+        "iou_sum": 0.0,
+        "detection_count": 0
+    }
+
+    # Setup video output
+    out = cv2.VideoWriter(OUTPUT_VIDEO, cv2.VideoWriter_fourcc(*"mp4v"), FPS, FRAME_SIZE)
+    cv2.namedWindow("Realistic Raccoon Detection", cv2.WINDOW_NORMAL)
+
+    print(f"🎬 Starting test sequence ({stats['total']} frames)...")
+    
+    for i in range(stats["total"]):
+        # Random environment
+        env_mode = random.choices(config.MODES, config.MODE_WEIGHTS)[0]
+        bg = random.choice(bg_images).copy()
+        
+        # Apply environmental effects
+        bg = env.apply_effect(bg, env_mode)
+
+        # Decide if this frame has a raccoon (higher probability)
+        pest_bbox = None
+        show_pest = random.random() < config.PEST_PROB
+        
+        if show_pest:
+            bg, pest_bbox = overlay.overlay_raccoon(bg)
+            if pest_bbox:  # Only count if successfully placed
+                stats["true"] += 1
+            else:
+                show_pest = False
+
+        # Run detection with environment-specific confidence
+        conf_thres = config.CONFIDENCE_THRESHOLDS[env_mode]
+        results = model(bg, conf=conf_thres, verbose=False, imgsz=640)
+        detections = []
+        pest_detected = False
+        best_iou = 0.0
+
+        # Process detections
+        for box in results[0].boxes:
+            conf = float(box.conf[0])
+            x1, y1, x2, y2 = map(int, box.xyxy[0])
+            detections.append((x1, y1, x2, y2, conf))
+            
+            # Check if this detection matches the pest
+            if pest_bbox and not pest_detected:
+                iou_val = calculate_iou((x1, y1, x2, y2), pest_bbox)
+                if iou_val > 0.3:  # Reasonable overlap threshold
+                    pest_detected = True
+                    stats["detected"] += 1
+                    stats["iou_sum"] += iou_val
+                    stats["detection_count"] += 1
+                    best_iou = max(best_iou, iou_val)
+
+        # Count false positives
+        if show_pest and pest_bbox:
+            if pest_detected:
+                # Only count extras as false positives
+                stats["false_pos"] += max(0, len(detections) - 1)
+            else:
+                # All detections are false positives if we missed the real one
+                stats["false_pos"] += len(detections)
+        elif not show_pest:
+            # Any detection is false positive if no pest present
+            stats["false_pos"] += len(detections)
+
+        # Draw visualization
+        frame = draw_detection_info(bg, detections, stats, i + 1, env_mode, conf_thres, pest_bbox)
+        out.write(frame)
+        cv2.imshow("Realistic Raccoon Detection", frame)
+        
+        # Progress update
+        if (i + 1) % 50 == 0:
+            current_recall = stats["detected"] / max(1, stats["true"])
+            print(f"📊 Progress: {i+1}/{stats['total']} - Recall: {current_recall:.3f}")
+        
+        if cv2.waitKey(1) & 0xFF == ord("q"):
+            break
+
+    out.release()
+    cv2.destroyAllWindows()
+
+    # Final metrics
+    recall = stats["detected"] / max(1, stats["true"])
+    precision = stats["detected"] / max(1, stats["detected"] + stats["false_pos"])
+    avg_iou = stats["iou_sum"] / max(1, stats["detection_count"])
+
+    print("\n" + "="*50)
+    print("🎯 REALISTIC TEST 5 SUMMARY")
+    print("="*50)
+    print(f"Total Frames: {stats['total']}")
+    print(f"True Raccoons: {stats['true']}")
+    print(f"Detected: {stats['detected']}")
+    print(f"False Positives: {stats['false_pos']}")
+    print(f"Final Recall: {recall:.3f}")
+    print(f"Final Precision: {precision:.3f}")
+    print(f"Average IoU: {avg_iou:.3f}")
+    print(f"Video saved: {OUTPUT_VIDEO}")
+    
+    # Performance assessment
+    print("\n📈 PERFORMANCE ASSESSMENT:")
+    if recall >= 0.8:
+        print("✅ EXCELLENT - Great real-world performance!")
+    elif recall >= 0.6:
+        print("✅ GOOD - Solid detection capability")
+    elif recall >= 0.4:
+        print("⚠️  FAIR - Needs improvement")
+    else:
+        print("❌ POOR - Significant domain gap detected")
+        
+    if precision >= 0.7:
+        print("✅ Good precision maintained")
+    else:
+        print("⚠️  Precision needs attention")
+
+if __name__ == "__main__":
+    run_realistic_test()  
