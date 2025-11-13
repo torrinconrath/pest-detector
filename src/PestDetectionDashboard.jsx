@@ -4,25 +4,14 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { AlertCircle, Shield, Camera } from "lucide-react";
 
-const LIVE_FEED_URL = "http://10.0.0.113:8081/video_feed";
-const ALERTS_URL = "http://10.0.0.113:8081/alerts";
+// const LIVE_FEED_URL = "http://10.0.0.113:8081/video_feed";
+// const ALERTS_URL = "http://10.0.0.113:8081/alerts";
+const LIVE_FEED_URL = "http://localhost:8081/video_feed";
+const ALERTS_URL = "http://localhost:8081/alerts";
 
 export default function PestDetectionDashboard() {
   const [alerts, setAlerts] = useState([]);
   const [liveFeedUrl, setLiveFeedUrl] = useState(LIVE_FEED_URL);
-
-  // // Mock alert system (replace with WebSocket/REST from Flask)
-  // useEffect(() => {
-  //   const interval = setInterval(() => {
-  //     const threats = ["Person", "Knife", "Unknown Object"];
-  //     const randomThreat = threats[Math.floor(Math.random() * threats.length)];
-  //     setAlerts((prev) => [
-  //       { id: Date.now(), type: randomThreat, time: new Date().toLocaleTimeString() },
-  //       ...prev.slice(0, 4),
-  //     ]);
-  //   }, 10000);
-  //   return () => clearInterval(interval);
-  // }, []);
 
   useEffect(() => {
     let evtSource;
@@ -69,7 +58,7 @@ export default function PestDetectionDashboard() {
       {/* Header */}
       <header className="flex items-center justify-between mb-6">
         <h1 className="text-3xl font-bold flex items-center gap-2">
-          <Shield className="text-green-400" /> Threat Detection Dashboard
+          <Shield className="text-green-400" /> Pest Detection Dashboard
         </h1>
         <Button className="bg-green-500 hover:bg-green-600">Settings</Button>
       </header>
