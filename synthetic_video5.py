@@ -36,7 +36,7 @@ class EnvironmentProfile:
     }
 
     PEST_PROB = 0.5  # Chance of spawning a raccoon in a frame
-    IOU_THRESHOLD = 0.3 
+    IOU_THRESHOLD = 0.2
 
 config = EnvironmentProfile()
 
@@ -131,9 +131,22 @@ class RaccoonOverlay:
 
         frame_w, frame_h = self.frame_size
 
-        # Prefer center of the frame for the overlay
-        x = random.randint(int(frame_w * 0.1), max(1, frame_w - new_w - int(frame_w * 0.1)))
-        y = random.randint(int(frame_h * 0.1), max(1, frame_h - new_h - int(frame_h * 0.1)))
+        # Ensure raccoon fits inside frame
+        if new_w >= frame_w or new_h >= frame_h:
+            scale = min((frame_w * 0.8) / w, (frame_h * 0.8) / h)
+            new_w, new_h = int(w * scale), int(h * scale)
+            pest_resized = cv2.resize(pest, (new_w, new_h))
+
+        # Compute valid bounds
+        x_min = int(frame_w * 0.1)
+        x_max = max(x_min, frame_w - new_w - x_min)
+        y_min = int(frame_h * 0.1)
+        y_max = max(y_min, frame_h - new_h - y_min)
+
+        # Sample random position safely
+        x = random.randint(x_min, x_max)
+        y = random.randint(y_min, y_max)
+
 
         # Roi blending
         roi = bg[y:y+new_h, x:x+new_w]
