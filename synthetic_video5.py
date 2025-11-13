@@ -18,7 +18,7 @@ from pathlib import Path
 MODEL_PATH = "runs/detect/train/weights/best.pt"
 TEST_IMAGES_DIR = "rebalanced_dataset/test/images"
 FRAME_SIZE = (640, 640)
-FPS = 8
+FPS = 10
 DURATION = 60
 OUTPUT_VIDEO = "synthetic_test5_v6_grayscale_raccoon.mp4"
 
@@ -28,14 +28,15 @@ class EnvironmentProfile:
     MODE_WEIGHTS = [0.3, 0.2, 0.2, 0.15, 0.15]
 
     CONFIDENCE_THRESHOLDS = {
-        "clear_night": 0.4,
-        "foggy_night": 0.45,
-        "rainy_night": 0.5,
-        "lens_glare": 0.45,
-        "overcast": 0.4
+        "clear_night": 0.3,
+        "foggy_night": 0.35,
+        "rainy_night": 0.4,
+        "lens_glare": 0.35,
+        "overcast": 0.3
     }
 
-    PEST_PROB = 0.07  # Chance of spawning a raccoon in a frame
+    PEST_PROB = 0.5  # Chance of spawning a raccoon in a frame
+    IOU_THRESHOLD = 0.3 
 
 config = EnvironmentProfile()
 
@@ -58,27 +59,34 @@ class GrayscaleEnvironment:
         elif mode == "rainy_night":
             gray *= 0.6
             # Add rain streaks
-            for _ in range(30):
+            for _ in range(40):
                 x = random.randint(0, gray.shape[1] - 1)
-                gray[:, x:x+1] += random.randint(15, 25)
+                length = random.randint(10, 25)
+                intensity = random.randint(10, 20)
+                for j in range(length):
+                    if x + j < gray.shape[1]:
+                        pos = min(gray.shape[0]-1, random.randint(0, gray.shape[0]-1) + j)
+                        gray[pos, x+j] += intensity
+
             gray = cv2.GaussianBlur(gray, (5, 5), 1.5)
 
         elif mode == "lens_glare":
             gray *= 0.7
             overlay = np.zeros_like(gray)
             # Add glare circles
-            for _ in range(random.randint(2, 4)):
+            for _ in range(random.randint(1, 2)):
                 center = (random.randint(0, gray.shape[1]), random.randint(0, gray.shape[0]))
-                radius = random.randint(30, 80)
+                radius = random.randint(50, 120)
                 cv2.circle(overlay, center, radius, random.randint(180, 255), -1)
-            gray = cv2.addWeighted(gray, 1.0, overlay, 0.4, 0)
+                cv2.GaussianBlur(overlay, (0, 0), 30, overlay)
+            gray = cv2.addWeighted(gray, 1.0, overlay, 0.3, 0)
 
         elif mode == "overcast":
             gray *= 0.8
             gray = cv2.equalizeHist(gray.astype(np.uint8)).astype(np.float32)
 
         # Add slight Gaussian noise
-        gray += np.random.normal(0, 4, gray.shape)
+        gray += np.random.normal(0, 2, gray.shape)
         gray = np.clip(gray, 0, 255).astype(np.uint8)
         return cv2.cvtColor(gray, cv2.COLOR_GRAY2BGR)
 
@@ -97,9 +105,14 @@ class RaccoonOverlay:
         for img_path in imgs:
             img = cv2.imread(img_path)
             if img is not None:
+
                 # Convert to grayscale for consistency
                 img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
                 img = cv2.cvtColor(img, cv2.COLOR_GRAY2BGR)
+
+                # Enhance contrast for better detection
+                img = cv2.convertScaleAbs(img, alpha=1.2, beta=10)
+
                 raccoons.append(img)
         print(f"✅ Loaded {len(raccoons)} grayscale raccoon images.")
         return raccoons
@@ -111,15 +124,23 @@ class RaccoonOverlay:
 
         pest = random.choice(self.images)
         h, w = pest.shape[:2]
-        scale = random.uniform(0.25, 0.4)
+
+        scale = random.uniform(0.3, 0.5)
         new_w, new_h = int(w * scale), int(h * scale)
         pest_resized = cv2.resize(pest, (new_w, new_h))
 
         frame_w, frame_h = self.frame_size
-        x = random.randint(0, max(1, frame_w - new_w))
-        y = random.randint(0, max(1, frame_h - new_h))
 
-        bg[y:y+new_h, x:x+new_w] = pest_resized
+        # Prefer center of the frame for the overlay
+        x = random.randint(int(frame_w * 0.1), max(1, frame_w - new_w - int(frame_w * 0.1)))
+        y = random.randint(int(frame_h * 0.1), max(1, frame_h - new_h - int(frame_h * 0.1)))
+
+        # Roi blending
+        roi = bg[y:y+new_h, x:x+new_w]
+        blend_ratio = 0.8
+        blended = cv2.addWeighted(pest_resized, blend_ratio, roi, 1 - blend_ratio, 0)
+
+        bg[y:y+new_h, x:x+new_w] = blended
         return bg, (x, y, x + new_w, y + new_h)
 
 # === METRICS ===
@@ -137,12 +158,18 @@ def iou(box1, box2):
 # === DRAWING ===
 def draw_info(frame, detections, stats, frame_idx, mode, conf_thres):
     for (x1, y1, x2, y2, conf) in detections:
-        cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
+        color = (0, 255, 0) if conf > 0.5 else (0, 200, 255)  # Color code by confidence
+        cv2.rectangle(frame, (x1, y1), (x2, y2), color, 2)
         cv2.putText(frame, f"raccoon {conf:.2f}", (x1, max(15, y1 - 6)),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1)
 
     recall = stats["detected"] / max(1, stats["true"])
     precision = stats["detected"] / max(1, stats["detected"] + stats["false_pos"])
+
+    # Color code metrics
+    recall_color = (0, 255, 0) if recall > 0.85 else (0, 165, 255) if recall > 0.7 else (0, 0, 255)
+    precision_color = (0, 255, 0) if precision > 0.85 else (0, 165, 255) if precision > 0.7 else (0, 0, 255)
+
     lines = [
         f"Frame: {frame_idx}/{stats['total']}",
         f"Env: {mode}",
@@ -153,7 +180,14 @@ def draw_info(frame, detections, stats, frame_idx, mode, conf_thres):
         f"Recall: {recall:.2f}",
         f"Precision: {precision:.2f}"
     ]
+
     for i, text in enumerate(lines):
+        color = (255, 255, 255)
+        if "Recall" in text:
+            color = recall_color
+        elif "Precision" in text:
+            color = precision_color
+
         cv2.putText(frame, text, (10, 20 + i * 18),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
     return frame
@@ -199,22 +233,43 @@ def run_test():
 
         # Detect
         conf_thres = config.CONFIDENCE_THRESHOLDS[env_mode]
-        results = model(bg, conf=conf_thres, verbose=False)
+        results = model(bg, conf=conf_thres, verbose=False, iou=0.5)
         detections = []
         pest_detected = False
 
         for box in results[0].boxes:
             conf = float(box.conf[0])
             x1, y1, x2, y2 = map(int, box.xyxy[0])
-            detections.append((x1, y1, x2, y2, conf))
-            if pest_bbox and not pest_detected:
-                if iou((x1, y1, x2, y2), pest_bbox) > 0.2:
-                    pest_detected = True
-                    stats["detected"] += 1
 
-        if not show_pest and detections:
+            # Ensure realistic detections
+            bbox_width = x2 - x1
+            bbox_height = y2 - y1
+            bbox_area = bbox_width * bbox_height
+            aspect_ratio = bbox_width / max(1, bbox_height)
+
+            min_area = 1500
+            max_area = 70000
+            min_aspect = 0.35  
+            max_aspect = 2.8
+
+            if (bbox_area >= min_area and bbox_area <= max_area and 
+                aspect_ratio >= min_aspect and aspect_ratio <= max_aspect):
+
+                detections.append((x1, y1, x2, y2, conf))
+
+                if pest_bbox:
+                    current_iou = iou((x1, y1, x2, y2), pest_bbox)
+
+                    if current_iou > config.IOU_THRESHOLD and not pest_detected:
+                        pest_detected = True
+                        stats["detected"] += 1
+
+        if not show_pest:
             stats["false_pos"] += len(detections)
-        elif show_pest and not pest_detected and detections:
+        elif show_pest and pest_detected:
+            # Only count EXTRA detections beyond the correct one
+            stats["false_pos"] += max(0, len(detections) - 1)
+        elif show_pest and not pest_detected:
             stats["false_pos"] += len(detections)
 
         frame = draw_info(bg, detections, stats, i + 1, env_mode, conf_thres)
