@@ -1,0 +1,7 @@
+path: c:\Users\plebj\Desktop\School\CS5814\rebalanced_raccoon_dataset
+train: train/images
+val: valid/images
+test: test/images
+nc: 1
+names:
+  0: raccoon

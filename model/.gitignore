@@ -1,0 +1,25 @@
+# Dataset directories - DO NOT TRACK THESE
+combined_dataset/
+combined_raccoon_dataset/
+combined_dataset_grayscale/
+combined_raccoon_dataset_grayscale/
+rebalanced_dataset/
+rebalanced_raccoon_dataset/
+
+
+# Dataset cache and temporary files
+*.cache
+*.tmp
+*.temp
+.cache/
+temp/
+tmp/
+*.mp4
+
+# No need to .ipynb folders of not developed or later ideas
+develop_video.ipynb
+testing.ipynb
+
+# No need to include model files or larger mouse for the git
+
+mouse.v2i.yolov11/
