@@ -2,8 +2,6 @@
 
 A computer vision research project developed for CS5814 at Virginia Tech. This project trains and evaluates multiple YOLO model variants for real-time raccoon and rodent detection on edge devices, and deploys the best-performing model through a React-based monitoring dashboard.
 
-> 📄 This is a solo academic project. The full research report is available in the repo.
-
 ---
 
 ## 📁 Project Structure
