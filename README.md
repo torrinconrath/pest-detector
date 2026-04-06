@@ -11,7 +11,7 @@ A real-time computer vision system for detecting raccoons and rodents using ligh
 **Raspberry Pi Test Demo at:** [raspberry-pi-demo.youtube.com](https://youtu.be/YlL3RZddY8s)   
 **Desktop (WSL) Test Demo at:** [desktop-demo.yotube.com](https://youtu.be/fZ9GX2W3kM0)  
 
-<p align="center">
+<p align="left">
   <img src="ui-ss.png" width="600" alt="pest detector inactive ui" />
 </p>
 
