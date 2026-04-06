@@ -2,6 +2,19 @@
 
 A real-time computer vision system for detecting raccoons and rodents using lightweight YOLO models, deployed through a React-based monitoring dashboard. Built to address the limitations of traditional motion sensors, which trigger on anything that moves, by using a focused object detector that only alerts on actual pests.
 
+<p align="center">
+  <img src="ui/public/raccoon_logo.png" width="800" alt="pest detector logo" />
+</p>
+
+
+**Synthetic Test Demo at:** [synthetic-test-demo.youtube.com](https://youtube.com/shorts/rnqaV3InL1M)   
+**Raspberry Pi Test Demo at:** [raspberry-pi-demo.youtube.com](https://youtu.be/YlL3RZddY8s)   
+**Desktop (WSL) Test Demo at:** [desktop-demo.yotube.com](https://youtu.be/fZ9GX2W3kM0)  
+
+<p align="center">
+  <img src="ui-ss.png" width="600" alt="pest detector inactive ui" />
+</p>
+
 ---
 
 ## 📁 Project Structure
